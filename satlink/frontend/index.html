@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SatLink — Satellite IoT Telemetry</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+  :root{--bg:#0f172a;--surface:#17222c;--sunken:#0f1a22;--ink:#e6ecf1;--ink-soft:#92a3b0;--line:#2a3945;--accent:#5aa9ec;--ok:#6fd394;--ok-bg:#153a26;--warn:#f0b95a;--warn-bg:#3d2d0e;--radius:10px;--sans:"Inter",system-ui,sans-serif;--mono:"JetBrains Mono",ui-monospace,monospace;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--sans);color:var(--ink);background:var(--bg);line-height:1.55;padding:0}
+  header{background:linear-gradient(135deg,#0b1322,#15222f);padding:72px 24px 56px;position:relative;overflow:hidden}
+  header::after{content:"";position:absolute;inset:0;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");pointer-events:none;opacity:0.6}
+  .inner{max-width:1080px;margin:0 auto;position:relative;z-index:1}
+  h1{font-size:clamp(36px,6vw,72px);font-weight:700;letter-spacing:-0.04em;line-height:1.05;margin-bottom:12px}
+  .subtitle{font-size:17px;color:var(--ink-soft);max-width:640px;margin-bottom:18px}
+  .pill-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .pill{padding:5px 14px;border-radius:999px;font-size:12px;font-weight:600;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:#fff}
+  main{max-width:1080px;margin:0 auto;padding:48px 24px;display:grid;gap:24px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:28px}
+  .card h2{font-size:20px;font-weight:600;margin-bottom:14px;color:var(--accent)}
+  .card p{font-size:15.5px;color:var(--ink-soft);margin-bottom:14px;line-height:1.65}
+  .card ul{padding-left:18px;color:var(--ink-soft);font-size:15px}
+  .card ul li{margin-bottom:6px}
+  a.btn{display:inline-block;padding:12px 22px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px;background:var(--accent);color:#fff;border:none;transition:background .15s;margin-top:8px}
+  a.btn:hover{background:#0a7ac2}
+  pre{font-family:var(--mono);font-size:12.5px;background:var(--sunken);border:1px solid var(--line);border-radius:6px;padding:14px;overflow-x:auto;white-space:pre-wrap;word-break:break-word;color:var(--ink);line-height:1.55}
+  footer{max-width:1080px;margin:0 auto;padding:24px 24px 48px;font-size:12.5px;color:#55646f}
+</style>
+</head>
+<body>
+<header>
+  <div class="inner">
+    <h1>The problem: TCP collapses over satellite links.</h1>
+    <p class="subtitle">SatLink fixes it with a custom UDP protocol (SLP) — selective repeat, adaptive RTO, SACK — so data survives 600 ms delay and 5% random loss.</p>
+    <div class="pill-row" aria-label="Status">
+      <span class="pill">Live Pipeline</span>
+      <span class="pill">UDP / SLP</span>
+      <span class="pill">Kafka</span>
+      <span class="pill">PostgreSQL</span>
+      <span class="pill">Redis</span>
+      <span class="pill">FastAPI</span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="card" aria-label="The Problem">
+    <h2>The problem (GEO satellite)</h2>
+    <ul>
+      <li><strong>RTT ~600 ms</strong> (36,000 km up + down)</li>
+      <li><strong>Random radio loss 1–5%</strong> — not congestion, but TCP treats it as such</li>
+      <li><strong>TCP throughput capped at</strong> <code>window / RTT</code> — 64 KB at 600 ms ≈ 0.87 Mbps</li>
+      <li><strong>TCP halves sending rate</strong> on random loss — wrong assumption for satellite links</li>
+      <li><strong>Result</strong>: slow, unstable telemetry over long-delay, lossy links</li>
+    </ul>
+    <a class="btn" href="dashboard.html">Open Dashboard →</a>
+  </section>
+
+  <section class="card" aria-label="The Answer">
+    <h2>The answer: SLP (SatLink Protocol)</h2>
+    <p>Reliable transport over UDP — full control of reliability mechanisms instead of relying on TCP assumptions.</p>
+    <ul>
+      <li><strong>Selective repeat</strong> — only missing packets resent, not whole window</li>
+      <li><strong>Sliding window</strong> — sized from bandwidth-delay product (BDP)</li>
+      <li><strong>Adaptive RTO</strong> — SRTT + RTTVAR with exponential backoff and Karn's rule</li>
+      <li><strong>SACK bitmap</strong> — 4-bit bitmap for selective retransmission</li>
+      <li><strong>CRC32</strong> — over 24-byte header (version/type + payload len + terminal ID + seq + ack + bitmap)</li>
+    </ul>
+  </section>
+
+  <section class="card" aria-label="What is running now">
+    <h2>What is running (end-to-end)</h2>
+    <p>Built at <code>/Users/tanishqkhetwal/Downloads/CreatorXDR/creatorxdr/</code>:</p>
+    <ul>
+      <li><strong>Terminal simulator</strong> (<code>terminal/sim.py</code>) — synthetic telemetry every 1s</li>
+      <li><strong>Satellite emulator</strong> (<code>emulator/</code>) — 300 ms delay + 10 ms jitter + 2% loss</li>
+      <li><strong>Gateway</strong> (<code>gateway/</code>) — UDP 9001, CRC verify, dedupe, ACK, Kafka publish</li>
+      <li><strong>Writer</strong> (<code>services/writer/</code>) — Kafka consumer → PostgreSQL batch + Redis + alerts</li>
+      <li><strong>FastAPI</strong> (<code>services/api/main.py</code>) — REST + WebSocket at <code>localhost:3000</code></li>
+      <li><strong>Dashboard</strong> (<code>frontend/dashboard.html</code>) — opens from the button above</li>
+    </ul>
+    <pre>GET /health                 → liveness
+GET /terminals              → list
+GET /terminals/{id}/state   → Redis latest
+GET /terminals/{id}/telemetry?from=&amp;to=  → Postgres history
+GET /alerts?open=true       → open alerts
+WS /ws/live                 → live feed</pre>
+  </section>
+
+  <section class="card" aria-label="How to run it yourself">
+    <h2>Quick commands</h2>
+    <pre>cd /Users/tanishqkhetwal/Downloads/CreatorXDR/creatorxdr
+
+# 1. Containers
+docker compose up -d
+
+# 2. Pipeline (start each in background)
+python terminal/sim.py
+python emulator/emulator.py
+python gateway/gateway.py
+python services/writer/writer.py
+
+# 3. API
+python services/api/main.py    # localhost:3000
+
+# 4. Open homepage (this page)
+open frontend/index.html</pre>
+  </section>
+</main>
+
+<footer>
+  SatLink Prototype 1 — built in <code>/Users/tanishqkhetwal/Downloads/CreatorXDR/creatorxdr/</code> — source blueprint: <code>SatLink_Prototype1.md</code> (9-phase build plan: identity → blockchain → login → phishing → dashboard → integration → testing → docs → future roadmap)
+</footer>
+</body>
+</html>

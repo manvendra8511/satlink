@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SatLink — Satellite IoT Dashboard</title>
+<style>
+  :root {
+    --bg: #edf0f3;
+    --surface: #ffffff;
+    --sunken: #f5f7f9;
+    --ink: #15222f;
+    --ink-soft: #55646f;
+    --line: #d5dce2;
+    --accent: #0a62b8;
+    --ok: #17703a;   --ok-bg: #dcf1e3;
+    --warn: #8f4a05; --warn-bg: #fbebc8;
+    --err: #a82a20;  --err-bg: #fbdcd8;
+    --radius: 6px;
+    --sans: "Segoe UI", "Helvetica Neue", Arial, system-ui, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101820; --surface: #17222c; --sunken: #0f1a22;
+      --ink: #e6ecf1; --ink-soft: #92a3b0; --line: #2a3945;
+      --accent: #5aa9ec;
+      --ok: #6fd394;   --ok-bg: #153a26;
+      --warn: #f0b95a; --warn-bg: #3d2d0e;
+      --err: #f29088;  --err-bg: #4a1f1b;
+    }
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { background: var(--bg); }
+  body {
+    font-family: var(--sans);
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  .topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar-inner {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand svg { width: 34px; height: 34px; flex: none; color: var(--accent); }
+  .brand h1 { font-size: 19px; font-weight: 650; letter-spacing: -0.01em; line-height: 1.2; }
+  .brand p { font-size: 13px; color: var(--ink-soft); }
+
+  .conn { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  main {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 24px;
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 16px;
+  }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .panel > header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+  }
+  .panel h2 { font-size: 15px; font-weight: 650; }
+  .panel header p { font-size: 13px; color: var(--ink-soft); margin-top: 2px; }
+  .panel .body { padding: 18px; flex: 1; min-width: 0; }
+
+  .p-status { grid-column: span 4; }
+  .p-state  { grid-column: span 4; }
+  .p-feed   { grid-column: span 4; }
+  .p-api    { grid-column: span 12; }
+
+  /* status pills */
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 3px 11px 3px 9px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+  .status::before {
+    content: "";
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .status.ok   { background: var(--ok-bg);   color: var(--ok); }
+  .status.warn { background: var(--warn-bg); color: var(--warn); }
+  .status.err  { background: var(--err-bg);  color: var(--err); }
+  .status.ok::before { animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.35; } }
+
+  /* status rows */
+  .rows { list-style: none; }
+  .rows li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 14px;
+  }
+  .rows li:first-child { padding-top: 0; }
+  .rows li:last-child { border-bottom: 0; padding-bottom: 0; }
+  .rows .label { color: var(--ink-soft); }
+  .rows .value { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  /* code blocks */
+  pre {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.6;
+    background: var(--sunken);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--ink);
+  }
+  .p-state pre, .p-feed pre { height: 240px; }
+  .p-state .body, .p-feed .body { display: flex; }
+  .p-state pre, .p-feed pre { flex: 1; }
+
+  /* endpoints */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 18px; border-bottom: 1px solid var(--line); vertical-align: baseline; }
+  th { font-size: 13px; font-weight: 600; color: var(--ink-soft); background: var(--sunken); }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.path { font-family: var(--mono); font-size: 13px; white-space: nowrap; }
+  td.desc { color: var(--ink-soft); }
+  .method {
+    display: inline-block;
+    min-width: 44px;
+    text-align: center;
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    background: var(--sunken);
+    border: 1px solid var(--line);
+    color: var(--accent);
+  }
+
+  a:focus-visible, button:focus-visible, pre:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  @media (max-width: 900px) {
+    .p-status, .p-state, .p-feed { grid-column: span 12; }
+    main { padding: 16px; }
+    .topbar-inner { padding: 14px 16px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .status.ok::before { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="12" y="12" width="8" height="8" rx="1.5" transform="rotate(45 16 16)"/>
+        <path d="M5 9l5 5M22 18l5 5"/>
+        <path d="M6 22c2.5 2.5 6 4 10 4M26 10c-2.5-2.5-6-4-10-4"/>
+      </svg>
+      <div>
+        <h1>SatLink</h1>
+        <p>Satellite IoT telemetry, prototype 1</p>
+      </div>
+    </div>
+    <div class="conn" aria-label="Connection summary">
+      <span class="status err" id="api-status-top">API checking</span>
+      <span class="status err" id="ws-status-top">Live feed offline</span>
+    </div>
+  </div>
+</div>
+
+<main>
+  <section class="panel p-status" aria-labelledby="h-status">
+    <header>
+      <h2 id="h-status">System status</h2>
+      <p>Backend connection and fleet size</p>
+    </header>
+    <div class="body">
+      <ul class="rows">
+        <li>
+          <span class="label">API</span>
+          <span id="api-status" class="status err">Checking...</span>
+        </li>
+        <li>
+          <span class="label">Terminals</span>
+          <span id="term-count" class="value">—</span>
+        </li>
+        <li>
+          <span class="label">WebSocket</span>
+          <span id="ws-status" class="status err">Disconnected</span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="panel p-state" aria-labelledby="h-state">
+    <header>
+      <h2 id="h-state">Terminal 42</h2>
+      <p>Latest state, refreshed every 5 seconds</p>
+    </header>
+    <div class="body">
+      <pre id="term42-state" tabindex="0" aria-live="polite">Loading...</pre>
+    </div>
+  </section>
+
+  <section class="panel p-feed" aria-labelledby="h-feed">
+    <header>
+      <h2 id="h-feed">Live feed</h2>
+      <p>Newest reading at the top</p>
+    </header>
+    <div class="body">
+      <pre id="live-feed" tabindex="0">Connecting...</pre>
+    </div>
+  </section>
+
+  <section class="panel p-api" aria-labelledby="h-api">
+    <header>
+      <h2 id="h-api">API endpoints</h2>
+    </header>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th scope="col">Method</th><th scope="col">Path</th><th scope="col">Returns</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="method">GET</span></td><td class="path">/health</td><td class="desc">Liveness check</td></tr>
+          <tr><td><span class="method">GET</span></td><td class="path">/terminals</td><td class="desc">List of terminals</td></tr>
+          <tr><td><span class="method">GET</span></td><td class="path">/terminals/{id}/state</td><td class="desc">Latest state from Redis</td></tr>
+          <tr><td><span class="method">GET</span></td><td class="path">/terminals/{id}/telemetry?from=&amp;to=</td><td class="desc">History from Postgres</td></tr>
+          <tr><td><span class="method">GET</span></td><td class="path">/alerts?open=true</td><td class="desc">Open alerts</td></tr>
+          <tr><td><span class="method">WS</span></td><td class="path">/ws/live</td><td class="desc">Live readings over WebSocket</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+const API = 'http://localhost:3000';
+const wsUrl = 'ws://localhost:3000/ws/live';
+
+// Mirrors the status pills in the section cards into the top bar summary.
+function setTop(id, text, cls) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = 'status ' + cls;
+}
+
+async function checkHealth() {
+  try {
+    const r = await fetch(API + '/health');
+    const d = await r.json();
+    document.getElementById('api-status').textContent = 'OK';
+    document.getElementById('api-status').className = 'status ok';
+    document.getElementById('term-count').textContent = '—';
+    setTop('api-status-top', 'API online', 'ok');
+  } catch (e) {
+    document.getElementById('api-status').textContent = 'Down';
+    document.getElementById('api-status').className = 'status err';
+    setTop('api-status-top', 'API unreachable', 'err');
+  }
+}
+
+async function fetchState() {
+  try {
+    const r = await fetch(API + '/terminals/42/state');
+    const d = await r.json();
+    document.getElementById('term42-state').textContent = JSON.stringify(d, null, 2);
+  } catch (e) {
+    document.getElementById('term42-state').textContent = 'Error: ' + e.message;
+  }
+}
+
+function connectWebSocket() {
+  const ws = new WebSocket(wsUrl);
+  ws.onopen = () => {
+    document.getElementById('ws-status').textContent = 'Connected';
+    document.getElementById('ws-status').className = 'status ok';
+    setTop('ws-status-top', 'Live feed on', 'ok');
+  };
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    const feed = document.getElementById('live-feed');
+    const line = '[' + new Date().toLocaleTimeString() + '] ' + JSON.stringify(data);
+    feed.textContent = line + '\n' + feed.textContent;
+    if (feed.textContent.length > 500) {
+      feed.textContent = feed.textContent.slice(0, 500);
+    }
+  };
+  ws.onclose = () => {
+    document.getElementById('ws-status').textContent = 'Reconnecting...';
+    document.getElementById('ws-status').className = 'status warn';
+    setTop('ws-status-top', 'Live feed reconnecting', 'warn');
+    setTimeout(connectWebSocket, 3000);
+  };
+}
+
+checkHealth();
+fetchState();
+connectWebSocket();
+setInterval(checkHealth, 5000);
+setInterval(fetchState, 5000);
+</script>
+</body>
+</html>
